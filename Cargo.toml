@@ -1,0 +1,10 @@
+[package]
+name = "DenoDig"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eszip = "0.79.1"
+object = "0.36.5"
+futures = "0.3.31"
+tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }

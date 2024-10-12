@@ -60,6 +60,7 @@ impl Trailer {
         let (eszip_archive_pos, rest) = rest.split_at(8);
         let (metadata_pos, rest) = rest.split_at(8);
         let (npm_vfs_pos, npm_files_pos) = rest.split_at(8);
+
         let eszip_archive_pos = u64_from_bytes(eszip_archive_pos)?;
         let metadata_pos = u64_from_bytes(metadata_pos)?;
         let npm_vfs_pos = u64_from_bytes(npm_vfs_pos)?;
@@ -81,7 +82,6 @@ impl Trailer {
     }
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let timer = Instant::now();
@@ -96,9 +96,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let bundle_pos = u64::from_be_bytes(*bundle_pos_arr);
 
         let bundle = &binary_data[bundle_pos as usize..&binary_data.len() - VERSION_UNO_OFFSET];
-        let mut file = File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/bundle.js"))
-            .expect("Failed to create file");
-        file.write_all(&bundle).expect("Failed to write to file");
+
+        write_to_file(
+            Path::new("/Users/fli/Git/DenoDig/test/extracted/bundle.js"),
+            bundle,
+        )
+        .unwrap();
     } else if check_version(&binary_data, VERSION_DOS_OFFSET) {
         println!("Binary compiled with Deno >=1.7.0  <1.33.3");
         let pointers: &[u8; 16] = &binary_data[(binary_data.len() - 16)..].try_into()?;
@@ -108,17 +111,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let metadata_pos_arr: &[u8; 8] = metadata_pos_arr.try_into()?;
 
         let bundle_pos = u64::from_be_bytes(*bundle_pos_arr);
-        let metadata_pos= u64::from_be_bytes(*metadata_pos_arr);
+        let metadata_pos = u64::from_be_bytes(*metadata_pos_arr);
 
         let bundle = &binary_data[bundle_pos as usize..metadata_pos as usize];
-        let metadata= &binary_data[metadata_pos as usize..binary_data.len() - VERSION_DOS_OFFSET];
-        let mut file = File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/bundle.js"))
-            .expect("Failed to create file");
-        let mut metadata_file= File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/metadata.json"))
-            .expect("Failed to create file");
+        let metadata = &binary_data[metadata_pos as usize..binary_data.len() - VERSION_DOS_OFFSET];
 
-        file.write_all(&bundle).expect("Failed to write to file");
-        metadata_file.write_all(&metadata).expect("Failed to write to file");
+        write_to_file(
+            Path::new("/Users/fli/Git/DenoDig/test/extracted/bundle.js"),
+            bundle,
+        )
+        .unwrap();
+        write_to_file(
+            Path::new("/Users/fli/Git/DenoDig/test/extracted/metadata.json"),
+            metadata,
+        )
+        .unwrap();
     } else if check_version(&binary_data, VERSION_TRES_OFFSET) {
         println!("Binary compiled with Deno >=1.33.3  <1.46");
         let trailer_data = &binary_data[binary_data.len() - TRAILER_SIZE..];
@@ -141,11 +148,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let base_directory = Path::new("/Users/fli/Git/DenoDig/test/extracted");
 
-        let mut metadata_file= File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/metadata.json"))
-            .expect("Failed to create file");
-        metadata_file.write_all(&metadata.as_bytes()).expect("Failed to write to file");
+        write_to_file(
+            Path::new("/Users/fli/Git/DenoDig/test/extracted/metadata.json"),
+            metadata.as_bytes(),
+        )
+        .unwrap();
 
-        extract_modules(eszip, base_directory).await;
+        extract_modules(eszip, base_directory).await.unwrap();
 
         // The offsets in the pre-1.46 versions are from the beginning of the file, which means
         // have to pass a reference to the whole binary here.
@@ -188,7 +197,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let base_directory = Path::new("/Users/fli/Git/DenoDig/test/extracted");
 
-        extract_modules(eszip, base_directory).await;
+        extract_modules(eszip, base_directory).await.unwrap();
 
         // Trying extract the packages is safe, because the virtual file system is `null` in case no packages are used.
         extract_packages(&trailer, &without_trailer)?;
@@ -199,34 +208,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn extract_modules(eszip: EszipV2, base_directory: &Path) {
+async fn extract_modules(eszip: EszipV2, base_directory: &Path) -> std::io::Result<()> {
     for specifier in eszip.specifiers().iter() {
         println!("Handling module '{}'", specifier);
 
-        let module = match eszip.get_module(specifier) {
-            Some(module) => module,
-            None => {
-                eprintln!("Failed to get module for {}", specifier);
-                continue;
+        if let Some(module) = eszip.get_module(specifier) {
+            let source = module.source().await.unwrap();
+            let file_path = base_directory.join(specifier);
+            let absolute_path = absolute(file_path)?;
+
+            if !absolute_path.starts_with(base_directory) {
+                panic!("Path traversal detected")
             }
-        };
 
-        let source = module.source().await.unwrap();
+            if let Some(parent) = absolute_path.parent() {
+                create_dir_all(parent)?;
+            }
 
-        let file_path = base_directory.join(specifier);
-        let absolute_path = absolute(file_path).unwrap();
-
-        if !absolute_path.starts_with(base_directory) {
-            panic!("Path traversal detected")
+            write_to_file(absolute_path, &source)?;
+        } else {
+            eprintln!("Failed to get module for {}", specifier);
         }
-
-        if let Some(parent) = absolute_path.parent() {
-            create_dir_all(parent).expect("Failed to create directories");
-        }
-
-        let mut file = File::create(Path::new(&absolute_path)).expect("Failed to create file");
-        file.write_all(&source).expect("Failed to write to file");
     }
+    Ok(())
 }
 
 pub fn extract_packages(trailer: &Trailer, without_trailer: &[u8]) -> Result<(), Box<dyn Error>> {
@@ -281,13 +285,7 @@ pub fn traverse_directories(
                     create_dir_all(parent).expect("Failed to create directories");
                 }
 
-                let mut file =
-                    File::create(Path::new(&absolute_path)).expect("Failed to create file");
-
-                // TODO: Put this behind a debug or verbose flag.
-                // println!("Extracting to {:?}", file_path);
-                file.write_all(&file_bytes)
-                    .expect("Failed to write to file");
+                write_to_file(absolute_path, file_bytes)?;
             }
             VfsEntry::Dir(sub_dir) => {
                 traverse_directories(sub_dir, npm_files, &current_path)?;
@@ -297,6 +295,7 @@ pub fn traverse_directories(
             }
         }
     }
+
     Ok(())
 }
 
@@ -307,7 +306,10 @@ fn u64_from_bytes(arr: &[u8]) -> Result<u64, Box<dyn Error>> {
 }
 
 fn check_version(binary_data: &[u8], offset: usize) -> bool {
-    let pos = binary_data.len() - offset;
-    let slice = &binary_data[pos..pos + MAGIC_TRAILER.len()];
-    slice == MAGIC_TRAILER
+    binary_data[binary_data.len() - offset..].starts_with(MAGIC_TRAILER)
+}
+
+fn write_to_file<P: AsRef<Path>>(path: P, content: &[u8]) -> std::io::Result<()> {
+    let mut file = File::create(path)?;
+    file.write_all(content)
 }

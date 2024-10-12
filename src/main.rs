@@ -1,7 +1,7 @@
 use eszip::EszipV2;
 use futures::io::BufReader;
 use futures::AsyncReadExt;
-use object::{Object, ObjectSection};
+use object::{Object, ObjectSection, ReadRef, Section};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::{create_dir_all, read, File};
@@ -11,6 +11,35 @@ use std::time::Instant;
 
 const MAGIC_TRAILER: &[u8; 8] = b"d3n0l4nd";
 const TRAILER_SIZE: usize = size_of::<Trailer>() + MAGIC_TRAILER.len();
+const VERSION_UNO_OFFSET: usize = 16;
+const VERSION_DOS_OFFSET: usize = 24;
+const VERSION_TRES_OFFSET: usize = TRAILER_SIZE;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum VfsEntry {
+    Dir(VirtualDirectory),
+    File(VirtualFile),
+    Symlink(VirtualSymlink),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VirtualDirectory {
+    pub name: String,
+    pub entries: Vec<VfsEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VirtualFile {
+    pub name: String,
+    pub offset: u64,
+    pub len: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VirtualSymlink {
+    pub name: String,
+    pub dest_parts: Vec<String>,
+}
 
 #[derive(Debug)]
 struct Trailer {
@@ -52,80 +81,121 @@ impl Trailer {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum VfsEntry {
-    Dir(VirtualDirectory),
-    File(VirtualFile),
-    Symlink(VirtualSymlink),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VirtualDirectory {
-    pub name: String,
-    pub entries: Vec<VfsEntry>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VirtualFile {
-    pub name: String,
-    pub offset: u64,
-    pub len: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VirtualSymlink {
-    pub name: String,
-    pub dest_parts: Vec<String>,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let timer = Instant::now();
 
+    // let binary_data = read("/Users/fli/Git/DenoDig/test/hello-v1.7.exe")?;
+    // let binary_data = read("/Users/fli/Git/DenoDig/test/telecraft_deno_1.44")?;
     let binary_data = read("/Users/fli/Git/DenoDig/test/telecraft_deno_1.46")?;
-    let file = object::File::parse(&*binary_data)?;
 
-    // TODO: If section_by_name returns nothing, we know that we deal with an old binary.
-    let section = file.section_by_name("d3n0l4nd").unwrap();
+    if check_version(&binary_data, VERSION_UNO_OFFSET) {
+        println!("Binary compiled with Deno >=1.6.0  <1.7.0");
+        let bundle_pos_arr: &[u8; 8] = &binary_data[(binary_data.len() - 8)..].try_into()?;
+        let bundle_pos = u64::from_be_bytes(*bundle_pos_arr);
 
-    println!("Found section '{}'", section.name()?);
+        let bundle = &binary_data[bundle_pos as usize..&binary_data.len() - VERSION_UNO_OFFSET];
+        let mut file = File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/bundle.js"))
+            .expect("Failed to create file");
+        file.write_all(&bundle).expect("Failed to write to file");
+    } else if check_version(&binary_data, VERSION_DOS_OFFSET) {
+        println!("Binary compiled with Deno >=1.7.0  <1.33.3");
+        let pointers: &[u8; 16] = &binary_data[(binary_data.len() - 16)..].try_into()?;
+        let (bundle_pos_arr, metadata_pos_arr) = pointers.split_at(8);
 
-    let data = section.data()?;
-    let trailer = Trailer::parse(&data[0..TRAILER_SIZE])?.unwrap();
+        let bundle_pos_arr: &[u8; 8] = bundle_pos_arr.try_into()?;
+        let metadata_pos_arr: &[u8; 8] = metadata_pos_arr.try_into()?;
 
-    // From now on we need to get rid of the leading trailer in order to calculate the correct offsets.
-    let without_trailer = &data[TRAILER_SIZE..];
+        let bundle_pos = u64::from_be_bytes(*bundle_pos_arr);
+        let metadata_pos= u64::from_be_bytes(*metadata_pos_arr);
 
-    if cfg!(debug_assertions) {
-        println!("Deno trailer structure: {:?}", trailer);
+        let bundle = &binary_data[bundle_pos as usize..metadata_pos as usize];
+        let metadata= &binary_data[metadata_pos as usize..binary_data.len() - VERSION_DOS_OFFSET];
+        let mut file = File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/bundle.js"))
+            .expect("Failed to create file");
+        let mut metadata_file= File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/metadata.json"))
+            .expect("Failed to create file");
+
+        file.write_all(&bundle).expect("Failed to write to file");
+        metadata_file.write_all(&metadata).expect("Failed to write to file");
+    } else if check_version(&binary_data, VERSION_TRES_OFFSET) {
+        println!("Binary compiled with Deno >=1.33.3  <1.46");
+        let trailer_data = &binary_data[binary_data.len() - TRAILER_SIZE..];
+
+        let trailer = Trailer::parse(trailer_data)?.unwrap();
+        let eszip_bytes = &binary_data[trailer.eszip_pos as usize..];
+
+        let bufreader = BufReader::new(eszip_bytes);
+        let (eszip, loader) = EszipV2::parse(bufreader).await?;
+
+        let bufreader = loader.await?;
+
+        let mut metadata = String::new();
+
+        bufreader
+            .take(trailer.metadata_len())
+            .read_to_string(&mut metadata)
+            .await
+            .unwrap();
+
+        let base_directory = Path::new("/Users/fli/Git/DenoDig/test/extracted");
+
+        let mut metadata_file= File::create(Path::new("/Users/fli/Git/DenoDig/test/extracted/metadata.json"))
+            .expect("Failed to create file");
+        metadata_file.write_all(&metadata.as_bytes()).expect("Failed to write to file");
+
+        extract_modules(eszip, base_directory).await;
+
+        // The offsets in the pre-1.46 versions are from the beginning of the file, which means
+        // have to pass a reference to the whole binary here.
+        extract_packages(&trailer, &binary_data)?;
+    } else {
+        println!("Binary compiled with Deno >= 1.46");
+        // Deno uses an object file section to store the application data since version 1.46.
+        // The presence of it determines our method of digging into the binary.
+        let file = object::File::parse(&*binary_data)?;
+        let section = file.section_by_name("d3n0l4nd").unwrap();
+        println!("Found section '{}'", section.name()?);
+
+        let data = section.data()?;
+        let trailer = Trailer::parse(&data[0..TRAILER_SIZE])?.unwrap();
+
+        // From now on we need to get rid of the leading trailer in order to calculate the correct offsets.
+        let without_trailer = &data[TRAILER_SIZE..];
+
+        if cfg!(debug_assertions) {
+            println!("Deno trailer structure: {:?}", trailer);
+        }
+
+        let bufreader = BufReader::new(without_trailer);
+
+        // "Once this function returns, the data section will not necessarially have been parsed yet.
+        // To parse the data section, poll/await the future returned in the second tuple slot."
+        // https://docs.rs/eszip/0.79.1/eszip/v2/struct.EszipV2.html#method.parse
+        let (eszip, loader) = EszipV2::parse(bufreader).await?;
+        let bufreader = loader.await?;
+
+        let mut metadata = String::new();
+
+        bufreader
+            .take(trailer.metadata_len())
+            .read_to_string(&mut metadata)
+            .await
+            .unwrap();
+
+        println!("metadata: {}", metadata);
+
+        let base_directory = Path::new("/Users/fli/Git/DenoDig/test/extracted");
+
+        extract_modules(eszip, base_directory).await;
+
+        // Trying extract the packages is safe, because the virtual file system is `null` in case no packages are used.
+        extract_packages(&trailer, &without_trailer)?;
     }
 
-    let bufreader = BufReader::new(without_trailer);
-
-    // "Once this function returns, the data section will not necessarially have been parsed yet.
-    // To parse the data section, poll/await the future returned in the second tuple slot."
-    // https://docs.rs/eszip/0.79.1/eszip/v2/struct.EszipV2.html#method.parse
-    let (eszip, loader) = EszipV2::parse(bufreader).await?;
-    let bufreader = loader.await?;
-
-    let mut metadata = String::new();
-
-    println!("metadata: {}", metadata);
-
-    bufreader
-        .take(trailer.metadata_len())
-        .read_to_string(&mut metadata)
-        .await
-        .unwrap();
-
-    let base_directory = Path::new("/Users/fli/Git/DenoDig/test/extracted");
-
-    extract_modules(eszip, base_directory).await;
-
-    // Trying extract the packages is safe, because the virtual file system is `null` in case no packages are used.
-    extract_packages(&trailer, &without_trailer)?;
-
     println!("🦖 digging took : {}s", timer.elapsed().as_secs_f64());
+
     Ok(())
 }
 
@@ -170,7 +240,7 @@ pub fn extract_packages(trailer: &Trailer, without_trailer: &[u8]) -> Result<(),
     // If no packages are included, this will be `null`.
     let vfs_root: Option<VirtualDirectory> = serde_json::from_slice(vfs_data)?;
 
-    if let Some(virtual_directory) = vfs_root{
+    if let Some(virtual_directory) = vfs_root {
         let npm_files = &without_trailer[trailer.npm_files_pos as usize..];
 
         traverse_directories(virtual_directory, npm_files, "")?;
@@ -214,16 +284,14 @@ pub fn traverse_directories(
                 let mut file =
                     File::create(Path::new(&absolute_path)).expect("Failed to create file");
 
-                // TODO: PUt this behind a debug or verbose flag.
+                // TODO: Put this behind a debug or verbose flag.
                 // println!("Extracting to {:?}", file_path);
                 file.write_all(&file_bytes)
                     .expect("Failed to write to file");
             }
-
             VfsEntry::Dir(sub_dir) => {
                 traverse_directories(sub_dir, npm_files, &current_path)?;
             }
-
             VfsEntry::Symlink(_symlink) => {
                 panic!("Can't handle symlinks yet")
             }
@@ -236,4 +304,10 @@ fn u64_from_bytes(arr: &[u8]) -> Result<u64, Box<dyn Error>> {
     let fixed_arr: &[u8; 8] = arr.try_into()?;
 
     Ok(u64::from_be_bytes(*fixed_arr))
+}
+
+fn check_version(binary_data: &[u8], offset: usize) -> bool {
+    let pos = binary_data.len() - offset;
+    let slice = &binary_data[pos..pos + MAGIC_TRAILER.len()];
+    slice == MAGIC_TRAILER
 }

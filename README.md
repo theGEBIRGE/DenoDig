@@ -30,9 +30,7 @@ Print version
 
 ## Demo
 
-
-https://github.com/user-attachments/assets/948084f4-75f6-408d-b86d-0f54fc432cdf
-
+https://github.com/user-attachments/assets/bce1191b-b249-4b3a-93f8-77d1666af04e
 
 ## Acknowledgements
 + [Deno Land](https://deno.com) for creating an awesome project and letting me borough some structs

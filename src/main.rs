@@ -64,13 +64,13 @@ impl Trailer {
         let (metadata_pos, rest) = rest.split_at(8);
         let (npm_vfs_pos, npm_files_pos) = rest.split_at(8);
 
-        let eszip_archive_pos = u64_from_bytes(eszip_archive_pos)?;
+        let eszip_pos = u64_from_bytes(eszip_archive_pos)?;
         let metadata_pos = u64_from_bytes(metadata_pos)?;
         let npm_vfs_pos = u64_from_bytes(npm_vfs_pos)?;
         let npm_files_pos = u64_from_bytes(npm_files_pos)?;
 
         Ok(Some(Trailer {
-            eszip_pos: eszip_archive_pos,
+            eszip_pos,
             metadata_pos,
             npm_vfs_pos,
             npm_files_pos,
@@ -90,16 +90,16 @@ impl Trailer {
     name = "Deno Dig",
     version = "1.0",
     author = "Frederic Linn",
-    about = "Parses --input and --output"
+    about = "A tool for excavating application code and npm packages from Deno compiled binaries"
 )]
 struct Cli {
     /// Input file path (required)
     #[arg(short, long)]
     input: PathBuf,
 
-    /// Output path (optional, defaults to the current executable's path + '/excavated')
+    /// Output directory (optional, defaults to the current executable's path)
     #[arg(short, long)]
-    output: Option<PathBuf>,
+    output_directory: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -109,14 +109,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     print_logo();
 
     // Get the output path: use the provided one, or fallback to the current working directory.
-    let mut output_path = args
-        .output
-        .unwrap_or_else(|| env::current_dir().expect("Failed to get the current executable path"));
+    let mut output_directory = args.output_directory.unwrap_or_else(|| {
+        env::current_dir().expect("[!] Failed to get the current executable path")
+    });
 
-    output_path = output_path.join("excavated");
+    output_directory = output_directory.join("excavated");
+    output_directory = absolute(output_directory)?;
+    create_dir_all(&output_directory).expect("[!] Failed to create output directory");
 
-    create_dir_all(&output_path)?;
-    process_binary_file(&args.input, &output_path).await?;
+    process_binary_file(&args.input, &output_directory).await?;
 
     Ok(())
 }
@@ -130,7 +131,7 @@ async fn process_binary_file(
     let binary_data = read(input_path).expect("Failed to open file");
 
     if check_version(&binary_data, VERSION_UNO_OFFSET) {
-        println!("Binary compiled with Deno >=1.6.0  <1.7.0");
+        println!("[*] Binary compiled with Deno >=1.6.0  <1.7.0");
         let bundle_pos_arr: &[u8; 8] = &binary_data[(binary_data.len() - 8)..].try_into()?;
         let bundle_pos = u64::from_be_bytes(*bundle_pos_arr);
 
@@ -138,7 +139,7 @@ async fn process_binary_file(
 
         write_to_file(&output_directory.join("bundle.js"), bundle).unwrap();
     } else if check_version(&binary_data, VERSION_DOS_OFFSET) {
-        println!("Binary compiled with Deno >=1.7.0  <1.33.3");
+        println!("[*] Binary compiled with Deno >=1.7.0  <1.33.3");
         let pointers: &[u8; 16] = &binary_data[(binary_data.len() - 16)..].try_into()?;
         let (bundle_pos_arr, metadata_pos_arr) = pointers.split_at(8);
 
@@ -154,7 +155,7 @@ async fn process_binary_file(
         write_to_file(&output_directory.join("bundle.js"), bundle).unwrap();
         write_to_file(&output_directory.join("metadata.json"), metadata).unwrap();
     } else if check_version(&binary_data, VERSION_TRES_OFFSET) {
-        println!("Binary compiled with Deno >=1.33.3  <1.46");
+        println!("[*] Binary compiled with Deno >=1.33.3  <1.46");
         let trailer_data = &binary_data[binary_data.len() - TRAILER_SIZE..];
 
         let trailer = Trailer::parse(trailer_data)?.unwrap();
@@ -178,10 +179,11 @@ async fn process_binary_file(
         extract_modules(eszip, output_directory).await.unwrap();
         extract_packages(&trailer, &binary_data, output_directory)?;
     } else {
-        println!("Binary compiled with Deno >= 1.46");
+        println!("[*] Binary compiled with Deno >= 1.46");
         let file = object::File::parse(&*binary_data)?;
         let section = file.section_by_name("d3n0l4nd").unwrap();
-        println!("Found section '{}'", section.name()?);
+
+        println!("[+] Found section '{}'", section.name()?);
 
         let data = section.data()?;
         let trailer = Trailer::parse(&data[0..TRAILER_SIZE])?.unwrap();
@@ -200,29 +202,29 @@ async fn process_binary_file(
             .await
             .unwrap();
 
-        println!("metadata: {}", metadata);
-
         write_to_file(&output_directory.join("metadata.json"), metadata.as_bytes()).unwrap();
+
         extract_modules(eszip, output_directory).await.unwrap();
         extract_packages(&trailer, &without_trailer, output_directory)?;
     }
 
-    println!("🦖 digging took : {}s", timer.elapsed().as_secs_f64());
+    println!("===========================================");
+    println!("✓ Digging took : {:.2}s", timer.elapsed().as_secs_f64());
 
     Ok(())
 }
 
 async fn extract_modules(eszip: EszipV2, output_directory: &Path) -> std::io::Result<()> {
     for specifier in eszip.specifiers().iter() {
-        println!("Handling module '{}'", specifier);
-
         if let Some(module) = eszip.get_module(specifier) {
+            println!("[+] Handling module '{}'", specifier);
+
             let source = module.source().await.unwrap();
             let file_path = output_directory.join(specifier);
             let absolute_path = absolute(file_path)?;
 
             if !absolute_path.starts_with(output_directory) {
-                panic!("Path traversal detected")
+                panic!("[!] Path traversal detected")
             }
 
             if let Some(parent) = absolute_path.parent() {
@@ -231,7 +233,9 @@ async fn extract_modules(eszip: EszipV2, output_directory: &Path) -> std::io::Re
 
             write_to_file(absolute_path, &source)?;
         } else {
-            eprintln!("Failed to get module for {}", specifier);
+            if !specifier.starts_with("npm") {
+                eprintln!("[!] Failed to get module for {}", specifier);
+            }
         }
     }
     Ok(())
@@ -244,12 +248,7 @@ pub fn extract_packages(
 ) -> Result<(), Box<dyn Error>> {
     let vfs_data = &without_trailer[trailer.npm_vfs_pos as usize..trailer.npm_files_pos as usize];
 
-    // TODO: Put this behind a verbose or debug flag.
-    if cfg!(debug_assertions) {
-        // println!("Serialized virtual file system : {}", std::str::from_utf8(vfs_data)?);
-    }
-
-    // If no packages are included, this will be `null`.
+    // If no packages are included, the JSON will be `null`.
     let vfs_root: Option<VirtualDirectory> = serde_json::from_slice(vfs_data)?;
 
     if let Some(virtual_directory) = vfs_root {
@@ -268,7 +267,7 @@ pub fn traverse_directories(
     parent_path: &str,
 ) -> Result<(), Box<dyn Error>> {
     let current_path = if parent_path.is_empty() {
-        dir.name.clone()
+        dir.name
     } else {
         format!("{}/{}", parent_path, dir.name)
     };
@@ -285,11 +284,11 @@ pub fn traverse_directories(
                 let absolute_path = absolute(&file_path).unwrap();
 
                 if !absolute_path.starts_with(output_directory) {
-                    panic!("Path traversal detected")
+                    panic!("[!] Path traversal detected")
                 }
 
                 if let Some(parent) = absolute_path.parent() {
-                    create_dir_all(parent).expect("Failed to create directories");
+                    create_dir_all(parent).expect("[!] Failed to create directories");
                 }
 
                 write_to_file(absolute_path, file_bytes)?;
@@ -298,7 +297,7 @@ pub fn traverse_directories(
                 traverse_directories(sub_dir, npm_files, output_directory, &current_path)?;
             }
             VfsEntry::Symlink(_symlink) => {
-                panic!("Can't handle symlinks yet")
+                panic!("[!] Can't handle symlinks yet")
             }
         }
     }

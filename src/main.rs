@@ -88,16 +88,16 @@ impl Trailer {
 #[derive(Parser, Debug)]
 #[command(
     name = "Deno Dig",
-    version = "1.0",
+    version = "1.0.0",
     author = "Frederic Linn",
-    about = "A tool for excavating application code and npm packages from Deno compiled binaries"
+    about = "A tool for excavating application code and npm packages from stand-alone Deno binaries "
 )]
 struct Cli {
     /// Input file path (required)
     #[arg(short, long)]
     input: PathBuf,
 
-    /// Output directory (optional, defaults to the current executable's path)
+    /// Output directory (optional, defaults to the current working directory)
     #[arg(short, long)]
     output_directory: Option<PathBuf>,
 }

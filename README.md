@@ -30,6 +30,10 @@ Print version
 
 ## Demo
 
+
+https://github.com/user-attachments/assets/948084f4-75f6-408d-b86d-0f54fc432cdf
+
+
 ## Acknowledgements
 + [Deno Land](https://deno.com) for creating an awesome project and letting me borough some structs
 + Original Deno logo by [Ryan Dahl](https://tinyclouds.org) (according to [this](https://deno.com/artwork))

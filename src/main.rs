@@ -2,7 +2,7 @@ use clap::Parser;
 use eszip::EszipV2;
 use futures::io::BufReader;
 use futures::AsyncReadExt;
-use object::{Object, ObjectSection};
+use object::{BinaryFormat, Object, ObjectSection};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
@@ -180,12 +180,37 @@ async fn process_binary_file(
         extract_packages(&trailer, &binary_data, output_directory)?;
     } else {
         println!("[*] Binary compiled with Deno >= 1.46");
+
         let file = object::File::parse(&*binary_data)?;
-        let section = file.section_by_name("d3n0l4nd").unwrap();
+        let data;
 
-        println!("[+] Found section '{}'", section.name()?);
+        match file.format() {
+            BinaryFormat::Elf => {
+                println!("[+] ELF file detected");
 
-        let data = section.data()?;
+                let offset_arr: &[u8; 4] = &binary_data[(binary_data.len() - 4)..].try_into()?;
+                let negative_offset= u32::from_le_bytes(*offset_arr);
+
+                let offset = binary_data.len() - negative_offset as usize;
+
+                data = Vec::from(&binary_data[offset..binary_data.len() - 12]);
+
+            }
+            BinaryFormat::MachO => {
+                println!("[+] Mach-O file detected");
+                let section = file.section_by_name("d3n0l4nd").unwrap();
+
+                println!("[+] Found section '{}'", section.name()?);
+
+                data = Vec::from(section.data()?);
+
+            }
+            BinaryFormat::Pe => {
+                panic!("[!] PE files currently unsupported");
+            }
+            _ => { panic!("[!] Unsupported binary format"); }
+        }
+
         let trailer = Trailer::parse(&data[0..TRAILER_SIZE])?.unwrap();
 
         let without_trailer = &data[TRAILER_SIZE..];

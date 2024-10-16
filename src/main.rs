@@ -2,15 +2,21 @@ use clap::Parser;
 use eszip::EszipV2;
 use futures::io::BufReader;
 use futures::AsyncReadExt;
-use object::{BinaryFormat, Object, ObjectSection};
+use object::coff::CoffHeader;
+use object::read::pe::{
+    ImageNtHeaders, ResourceDirectory, ResourceDirectoryEntryData, ResourceDirectoryTable,
+    ResourceNameOrId,
+};
+use object::LittleEndian as LE;
+use object::{pe, BinaryFormat, Object, ObjectSection};
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::error::Error;
 use std::fs::{create_dir_all, read, File};
 use std::io::Write;
 use std::path::PathBuf;
 use std::path::{absolute, Path};
 use std::time::Instant;
+use std::{env, process};
 
 const MAGIC_TRAILER: &[u8; 8] = b"d3n0l4nd";
 const TRAILER_SIZE: usize = size_of::<Trailer>() + MAGIC_TRAILER.len();
@@ -117,7 +123,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     output_directory = absolute(output_directory)?;
     create_dir_all(&output_directory).expect("[!] Failed to create output directory");
 
-    process_binary_file(&args.input, &output_directory).await?;
+    let input = Path::new("/Users/fli/Git/DenoDig/test/telegraf-2.0.exe");
+    // let input = Path::new("/Users/fli/Git/DenoDig/test/telecraft_deno_1.46");
+    // let input = Path::new("/Users/fli/Git/DenoDig/test/telecraft-linux-x86_64");
+    // let input = Path::new("/Users/fli/Git/DenoDig/test/cli");
+
+    process_binary_file(input, &output_directory).await?;
 
     Ok(())
 }
@@ -189,12 +200,11 @@ async fn process_binary_file(
                 println!("[+] ELF file detected");
 
                 let offset_arr: &[u8; 4] = &binary_data[(binary_data.len() - 4)..].try_into()?;
-                let negative_offset= u32::from_le_bytes(*offset_arr);
+                let negative_offset = u32::from_le_bytes(*offset_arr);
 
                 let offset = binary_data.len() - negative_offset as usize;
 
                 data = Vec::from(&binary_data[offset..binary_data.len() - 12]);
-
             }
             BinaryFormat::MachO => {
                 println!("[+] Mach-O file detected");
@@ -203,12 +213,64 @@ async fn process_binary_file(
                 println!("[+] Found section '{}'", section.name()?);
 
                 data = Vec::from(section.data()?);
-
             }
             BinaryFormat::Pe => {
-                panic!("[!] PE files currently unsupported");
+                println!("[+] PE file detected");
+
+                let dos_header = pe::ImageDosHeader::parse(&*binary_data)?;
+                let mut offset = dos_header.nt_headers_offset().into();
+                let (nt_headers, data_directories) =
+                    pe::ImageNtHeaders64::parse(&*binary_data, &mut offset)?;
+
+                let header = nt_headers.file_header();
+                let sections = header.sections(&*binary_data, offset).unwrap();
+
+                let mut section_rva = 0;
+                let mut section_raw_offset = 0;
+
+                let mut found_section = false;
+
+                for section in sections.iter() {
+                    if let Ok(section_name) = std::str::from_utf8(&section.name) {
+                        if section_name.starts_with(".pedata") {
+                            println!(
+                                "Found {:?} with virtual address {}, pointer to raw data {}",
+                                section_name,
+                                section.virtual_address.get(LE),
+                                section.pointer_to_raw_data.get(LE)
+                            );
+                            section_rva = section.virtual_address.get(LE);
+                            section_raw_offset = section.pointer_to_raw_data.get(LE);
+                            found_section = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !found_section {
+                    eprintln!("Error: .pedata section not found");
+                    process::exit(1);
+                }
+
+                let directory = data_directories
+                    .resource_directory(&*binary_data, &sections)
+                    .unwrap()
+                    .unwrap();
+
+                let root_table = directory.root().unwrap();
+
+                let (resource_rva, resource_size) =
+                    get_deno_resource(directory, root_table).unwrap();
+
+                // We must translate virtual addresses to actual file offsets in order get the correct slice.
+                // Formula: (RVA of the resource) - (virtual address of .pedata) + (raw offset of .pedata)
+                let start = resource_rva - section_rva + section_raw_offset;
+
+                data = Vec::from(&binary_data[start as usize..(start + resource_size) as usize]);
             }
-            _ => { panic!("[!] Unsupported binary format"); }
+            _ => {
+                panic!("[!] Unsupported binary format");
+            }
         }
 
         let trailer = Trailer::parse(&data[0..TRAILER_SIZE])?.unwrap();
@@ -464,4 +526,67 @@ mod tests {
         assert!(exists(metadata_path).unwrap());
         assert!(exists(modules_path).unwrap());
     }
+}
+
+fn get_deno_resource(
+    directory: ResourceDirectory<'_>,
+    root_table: ResourceDirectoryTable<'_>,
+) -> Option<(u32, u32)> {
+    const RT_RCDATA: u32 = 10;
+    let mut size: u32 = 0;
+    let mut virtual_address: u32 = 0;
+
+    // We start from the root table and collect every entry that's of type RT_RCDATA,
+    // see https://learn.microsoft.com/en-us/windows/win32/menurc/resource-types
+    // Here are more infos about the structure of those tables:
+    // https://lief.re/doc/stable/tutorials/07_pe_resource.html#resource-structure
+    let rcdata_tables: Vec<_> = root_table
+        .entries
+        .iter()
+        .filter(|entry| entry.name_or_id.get(LE) == RT_RCDATA)
+        .filter_map(|entry| match entry.data(directory) {
+            Ok(ResourceDirectoryEntryData::Table(sub_table)) => Some(sub_table),
+            _ => None,
+        })
+        .collect();
+
+    rcdata_tables.iter().for_each(|x| {
+        x.entries.iter().for_each(|entry| match entry.name_or_id() {
+            ResourceNameOrId::Name(name) => {
+                let name_or_id = entry.name_or_id.get(LE);
+                if let Ok(name) = name.to_string_lossy(directory) {
+                    if name.eq("D3N0L4ND") {
+                        println!(
+                            "Found Deno resource \"{}\" at offset (0x{:X})",
+                            name, name_or_id
+                        );
+                        let test = entry.data(directory).unwrap();
+                        let test_table = test.table().unwrap();
+
+                        for lower_entry in test_table.entries {
+                            match lower_entry.data(directory) {
+                                Ok(ResourceDirectoryEntryData::Data(data_entry)) => {
+                                    println!("WE FOUND RESOURCE DATA");
+                                    println!(
+                                        "VirtualAddress {}",
+                                        data_entry.offset_to_data.get(LE)
+                                    );
+                                    println!("Size {}", data_entry.size.get(LE));
+                                    println!("CodePage {}", data_entry.code_page.get(LE));
+                                    println!("Reserved {}", data_entry.reserved.get(LE));
+
+                                    virtual_address = data_entry.offset_to_data.get(LE);
+                                    size = data_entry.size.get(LE)
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        })
+    });
+
+    Some((virtual_address, size))
 }

@@ -94,7 +94,7 @@ impl Trailer {
 #[derive(Parser, Debug)]
 #[command(
     name = "Deno Dig",
-    version = "1.0.0",
+    version = "1.1.0",
     author = "Frederic Linn",
     about = "A tool for excavating application code and npm packages from stand-alone Deno binaries "
 )]

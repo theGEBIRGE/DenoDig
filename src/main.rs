@@ -1,9 +1,11 @@
 use clap::Parser;
-use std::error::Error;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
-use std::path::absolute;
 use std::env;
+use std::error::Error;
+use std::fs::{read, File};
+use std::io::Write;
+use std::path::absolute;
+use std::path::PathBuf;
+use std::time::Instant;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -33,12 +35,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
         env::current_dir().expect("[!] Failed to get the current executable path")
     });
 
-    output_directory = output_directory.join("excavated");
+    output_directory = output_directory.join("excavated.zip");
     output_directory = absolute(output_directory)?;
-    create_dir_all(&output_directory).expect("[!] Failed to create output directory");
 
+    let binary_data = read(args.input).expect("[!] Failed to open input file");
 
-    deno_dig_lib::process_binary_file(&args.input, &output_directory).await?;
+    let timer = Instant::now();
+
+    let zip = deno_dig_lib::process_binary_file(binary_data)
+        .await
+        .unwrap();
+
+    println!("======================================================");
+    println!("✓ Digging took : {:.2}s", timer.elapsed().as_secs_f64());
+
+    let mut file = File::create(output_directory).expect("[!] Failed to create file");
+    file.write_all(&zip).expect("TODO: panic message");
 
     Ok(())
 }

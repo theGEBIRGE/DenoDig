@@ -6,7 +6,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-tokio = { version = "1.0.0" }
+tokio = { version = "1.0.0", features = ["rt-multi-thread"]}
 clap = { version = "4.5.20", features = ["derive"] }
 deno-dig-lib = { path = "deno-dig-lib" }
 

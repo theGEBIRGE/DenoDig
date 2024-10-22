@@ -90,10 +90,6 @@ impl Trailer {
     }
 }
 
-// #[wasm_bindgen]
-// pub async fn process_binary_flies(binary_data: Vec<u8>) -> Vec<u8> {
-//     binary_data
-// }
 #[wasm_bindgen]
 pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
     let mut zip_buffer = Vec::new();

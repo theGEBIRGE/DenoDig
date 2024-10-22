@@ -1,5 +1,4 @@
 # Deno Dig
-
 <img src="resources/logo.png" alt="A white sock puppet underground between dinosaurs and skeletons">
 
 Deno Dig
@@ -29,9 +28,23 @@ Print version
 ```
 
 ## Demo
-
 https://github.com/user-attachments/assets/bce1191b-b249-4b3a-93f8-77d1666af04e
+
+## WebAssembly version
+The `web` directory contains a sexy webpage for the Wasm build of the `deno-dig-lib`.
+
+The Wasm blob and JavaScript glue is not included in the repository.
+In order to build them, you need [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) installed.
+
+Now you can do something like this:
+```shell
+cd deno-dig-lib
+wasm-pack build --target web --release --no-typescript --no-pack --out-dir "../web/pkg"
+cd ../web
+python3 -m http.server
+```
 
 ## Acknowledgements
 + [Deno Land](https://deno.com) for creating an awesome project and letting me borough some structs
 + Original Deno logo by [Ryan Dahl](https://tinyclouds.org) (according to [this](https://deno.com/artwork))
++ The [Googlers](https://blog.google/products/chrome/chrome-dino/) for creating the dinosaur sprite

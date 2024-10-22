@@ -35,8 +35,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         env::current_dir().expect("[!] Failed to get the current executable path")
     });
 
-    output_directory = output_directory.join("excavated.zip");
-    output_directory = absolute(output_directory)?;
+    let mut output_path= output_directory.join("excavated.zip");
+    output_path= absolute(output_path)?;
 
     let binary_data = read(args.input).expect("[!] Failed to open input file");
 
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("======================================================");
     println!("✓ Digging took : {:.2}s", timer.elapsed().as_secs_f64());
 
-    let mut file = File::create(output_directory).expect("[!] Failed to create file");
+    let mut file = File::create(output_path).expect("[!] Failed to create file");
     file.write_all(&zip).expect("TODO: panic message");
 
     Ok(())

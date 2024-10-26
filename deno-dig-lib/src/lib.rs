@@ -457,7 +457,7 @@ fn check_version(binary_data: &[u8], offset: usize) -> bool {
 //         let temp_dir = tempdir().unwrap();
 //         let temp_path = temp_dir.path();
 //
-//         let binary_data = read("/Users/fli/Git/DenoDig/test/hello-v1.6.exe").expect("[!] Failed to open input file");
+//         let binary_data = read("").expect("[!] Failed to open input file");
 //
 //         process_binary_file(
 //             binary_data,
@@ -477,7 +477,7 @@ fn check_version(binary_data: &[u8], offset: usize) -> bool {
 //         let temp_path = temp_dir.path();
 //
 //         process_binary_file(
-//             Path::new("/Users/fli/Git/DenoDig/test/hello-v1.7.exe"),
+//             Path::new(""),
 //             temp_path,
 //         )
 //             .await
@@ -497,7 +497,7 @@ fn check_version(binary_data: &[u8], offset: usize) -> bool {
 //         let temp_path = temp_dir.path();
 //
 //         process_binary_file(
-//             Path::new("/Users/fli/Git/DenoDig/test/telecraft_deno_1.44"),
+//             Path::new(""),
 //             temp_path,
 //         )
 //             .await
@@ -517,7 +517,7 @@ fn check_version(binary_data: &[u8], offset: usize) -> bool {
 //         let temp_path = temp_dir.path();
 //
 //         process_binary_file(
-//             Path::new("/Users/fli/Git/DenoDig/test/telecraft_deno_1.46"),
+//             Path::new(""),
 //             temp_path,
 //         )
 //             .await

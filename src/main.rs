@@ -10,7 +10,7 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(
     name = "Deno Dig",
-    version = "1.1.0",
+    version = "1.2.0",
     author = "Frederic Linn",
     about = "A tool for excavating application code and npm packages from stand-alone Deno binaries "
 )]

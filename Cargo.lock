@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "DenoDig"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "clap",
  "deno-dig-lib",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "deno-dig-lib"
-version = "0.1.0"
+version = "1.2.0"
 dependencies = [
  "eszip",
  "futures",

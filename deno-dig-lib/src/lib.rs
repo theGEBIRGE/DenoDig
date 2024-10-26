@@ -107,7 +107,7 @@ pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
         let bundle = &binary_data[bundle_pos as usize..&binary_data.len() - VERSION_UNO_OFFSET];
 
         zip.start_file_from_path("bundle.js", options)
-            .expect("TODO: panic message");
+            .expect("[!] Can't create file in zip archive");
         zip.write_all(bundle).unwrap();
     } else if check_version(&binary_data, VERSION_DOS_OFFSET) {
         println!("[*] Binary compiled with Deno >=1.7.0  <1.33.3");
@@ -124,10 +124,10 @@ pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
         let metadata = &binary_data[metadata_pos as usize..binary_data.len() - VERSION_DOS_OFFSET];
 
         zip.start_file_from_path("bundle.js", options)
-            .expect("TODO: panic message");
+            .expect("[!] Can't create file in zip archive");
         zip.write_all(bundle).unwrap();
         zip.start_file_from_path("metadata.js", options)
-            .expect("TODO: panic message");
+            .expect("[!] Can't create file in zip archive");
         zip.write_all(metadata).unwrap();
     } else if check_version(&binary_data, VERSION_TRES_OFFSET) {
         println!("[*] Binary compiled with Deno >=1.33.3  <1.46");
@@ -266,7 +266,7 @@ pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
             .unwrap();
 
         zip.start_file_from_path("metadata.js", options)
-            .expect("TODO: panic message");
+            .expect("[!] Can't create file in zip archive");
         zip.write_all(metadata.as_bytes()).unwrap();
 
         extract_modules(eszip, &mut zip, options)
@@ -295,7 +295,7 @@ async fn extract_modules(
             // We don't have to worry about zip slips, right?
             // https://docs.rs/zip/2.2.0/zip/write/struct.ZipWriter.html#method.start_file_from_path
             zip.start_file_from_path(specifier, options)
-                .expect("TODO: panic message");
+                .expect("[!] Can't create file in zip archive");
 
             zip.write_all(&source)?;
         } else {
@@ -352,7 +352,7 @@ pub fn traverse_directories(
                 // We don't have to worry about zip slips, right?
                 // https://docs.rs/zip/2.2.0/zip/write/struct.ZipWriter.html#method.start_file_from_path
                 zip.start_file_from_path(&file_path, options)
-                    .expect("TODO: panic message");
+                    .expect("[!] Can't create file in zip archive");
                 zip.write_all(file_bytes)?;
             }
             VfsEntry::Dir(sub_dir) => {

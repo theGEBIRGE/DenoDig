@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("✓ Digging took : {:.2}s", timer.elapsed().as_secs_f64());
 
     let mut file = File::create(output_path).expect("[!] Failed to create file");
-    file.write_all(&zip).expect("TODO: panic message");
+    file.write_all(&zip).expect("[!] Failed to write to file");
 
     Ok(())
 }

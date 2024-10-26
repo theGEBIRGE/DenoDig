@@ -45,6 +45,6 @@ python3 -m http.server
 ```
 
 ## Acknowledgements
-+ [Deno Land](https://deno.com) for creating an awesome project and letting me borough some structs
++ [Deno Land](https://deno.com) for creating an awesome project and letting me borrow some structs
 + Original Deno logo by [Ryan Dahl](https://tinyclouds.org) (according to [this](https://deno.com/artwork))
 + The [Googlers](https://blog.google/products/chrome/chrome-dino/) for creating the dinosaur sprite

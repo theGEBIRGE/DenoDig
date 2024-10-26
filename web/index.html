@@ -1,221 +1,227 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>🦖🍆</title>
     <style>
-        body {
-            display: flex;
-            justify-content: center;
-            flex-direction: column;
-            overflow: hidden;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f8f8f8;
-            font-family: "Comic Sans MS", sans-serif;
-        }
+      body {
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+        overflow: none;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f8f8f8;
+        font-family: "Comic Sans MS", sans-serif;
+      }
 
-        #drop-zone {
-            outline: 4px dashed deeppink;
-            padding: 20px;
-            margin: 20px;
-            width: 80vh;
-            height: 70vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            font-size: xxx-large;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            cursor: pointer;
-            background-color: #ffff;
-        }
+      #drop-zone {
+        outline: 4px dashed deeppink;
+        padding: 20px;
+        margin: 20px;
+        width: 80vw; /* Changed to vw for better scaling on smaller devices */
+        max-width: 600px; /* Limit max width */
+        height: 50vh;
+        max-height: 400px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        font-size: 2rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+        background-color: #ffff;
+      }
 
-        #drop-zone:hover, #drop-zone:focus {
-            outline: 4px solid deeppink;
-        }
+      #drop-zone:hover,
+      #drop-zone:focus {
+        outline: 4px solid deeppink;
+      }
 
-        #file-info {
-            margin-top: 20px;
-            text-align: center;
-        }
+      #file-info {
+        margin-top: 20px;
+        text-align: center;
+      }
 
-        #file-info p {
-            display: inline-block;
-            margin-right: 10px;
-        }
+      #file-info p {
+        display: inline-block;
+        margin-right: 10px;
+      }
 
-        #remove-file-btn {
-            font-size: x-large;
-            border: none;
-            font-weight: bold;
-            color: #000;
-            background: none;
-        }
+      #remove-file-btn {
+        font-size: x-large;
+        border: none;
+        font-weight: bold;
+        color: #000;
+        background: none;
+      }
 
-        #remove-file-btn:hover {
-            background: orangered;
-            border: black;
-        }
+      #remove-file-btn:hover {
+        background: orangered;
+        border: black;
+      }
 
-        #process-btn {
-            display: none;
-            margin: 20px auto;
-            padding: 10px 20px;
-            color: white;
-            cursor: pointer;
-            background-color: deeppink;
-        }
+      #process-btn {
+        display: none;
+        margin: 20px auto;
+        padding: 10px 20px;
+        color: white;
+        cursor: pointer;
+        background-color: deeppink;
+      }
 
-        #process-btn:hover {
-            color: black;
-        }
+      #process-btn:hover {
+        color: black;
+      }
 
-        #dino {
-            position: absolute;
-            bottom: 0;
-            width: 44px;
-            height: 42px;
-            background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQgAAAAvAgMAAABiRrxWAAAADFBMVEX///9TU1P39/f///+TS9URAAAAAXRSTlMAQObYZgAAAPpJREFUeF7d0jFKRkEMhdGLMM307itNLALyVmHvJuzTDMjdn72E95PGFEZSmeoU4YMMgxhskvQec8YSVFX1NhGcS5ywtbmC8khcZeKq+ZWJ4F8Sr2+ZCErjkJFEfcjAc/6/BMlfcz6xHdhRthYzIZhIHMcTVY1scUUiAphK8CMSPUbieTBhvD9Lj0vyV4wklEGzHpciKGOJoBp7XDcFs4kWxxM7Ey3iZ8JbzASAvMS7XLOJHTTvEkEZSeQl7DMuwVyCasqK5+XzQRYLUJlMbPXjFcn3m8eKBSjWZMJwvGIOvViAzCbUj1VEDoqFOEQGE3SyInJQLOQMJL4B7enP1UbLXJQAAAAASUVORK5CYII=") 0 0;
-            animation: sprite 1s steps(6) infinite, move 6s linear infinite;
-        }
+      #dino {
+        position: absolute;
+        bottom: 0;
+        width: 44px;
+        height: 42px;
+        background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQgAAAAvAgMAAABiRrxWAAAADFBMVEX///9TU1P39/f///+TS9URAAAAAXRSTlMAQObYZgAAAPpJREFUeF7d0jFKRkEMhdGLMM307itNLALyVmHvJuzTDMjdn72E95PGFEZSmeoU4YMMgxhskvQec8YSVFX1NhGcS5ywtbmC8khcZeKq+ZWJ4F8Sr2+ZCErjkJFEfcjAc/6/BMlfcz6xHdhRthYzIZhIHMcTVY1scUUiAphK8CMSPUbieTBhvD9Lj0vyV4wklEGzHpciKGOJoBp7XDcFs4kWxxM7Ey3iZ8JbzASAvMS7XLOJHTTvEkEZSeQl7DMuwVyCasqK5+XzQRYLUJlMbPXjFcn3m8eKBSjWZMJwvGIOvViAzCbUj1VEDoqFOEQGE3SyInJQLOQMJL4B7enP1UbLXJQAAAAASUVORK5CYII=")
+          0 0;
+        animation:
+          sprite 1s steps(6) infinite,
+          move 6s linear infinite;
+      }
 
-        @keyframes sprite {
-            from {
-                background-position: 0 0;
-            }
-            to {
-                background-position: -264px 0;
-            }
+      @keyframes sprite {
+        from {
+          background-position: 0 0;
         }
+        to {
+          background-position: -264px 0;
+        }
+      }
 
-        @keyframes move {
-            from {
-                left: -50px;
-            }
-            to {
-                left: 100vw;
-            }
+      @keyframes move {
+        from {
+          left: -50px;
         }
+        to {
+          left: 100vw;
+        }
+      }
     </style>
 
     <script type="module">
-        import init, {process_binary_file} from "./pkg/deno_dig_lib.js";
+      import init, { process_binary_file } from "./pkg/deno_dig_lib.js";
 
-        init();
+      init();
 
-        let selectedFile = null;
+      let selectedFile = null;
 
-        const dropZone = document.querySelector('#drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const processButton = document.getElementById('process-btn');
-        const removeButton = document.getElementById('remove-file-btn')
-        const fileInfo = document.getElementById('file-info');
-        const fileName = document.getElementById('file-name');
+      const dropZone = document.querySelector("#drop-zone");
+      const fileInput = document.getElementById("file-input");
+      const processButton = document.getElementById("process-btn");
+      const removeButton = document.getElementById("remove-file-btn");
+      const fileInfo = document.getElementById("file-info");
+      const fileName = document.getElementById("file-name");
 
-        const processFile = async () => {
-            if (!selectedFile) {
-                alert("Please select or drop a file");
-                return;
-            }
-
-            const arrayBuffer = await selectedFile.arrayBuffer();
-            const denoBuffer = new Uint8Array(arrayBuffer);
-
-            let zipBytes = await process_binary_file(denoBuffer);
-            if (zipBytes) {
-                await downloadFile(zipBytes, "excavated.zip");
-            }
+      const processFile = async () => {
+        if (!selectedFile) {
+          alert("Please select or drop a file");
+          return;
         }
 
-        const downloadFile = async (uint8Array, fileName) => {
-            const blob = new Blob([uint8Array], {type: 'application/zip'});
-            const url = URL.createObjectURL(blob);
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const denoBuffer = new Uint8Array(arrayBuffer);
 
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
+        let zipBytes = await process_binary_file(denoBuffer);
+        if (zipBytes) {
+          await downloadFile(zipBytes, "excavated.zip");
+        }
+      };
 
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+      const downloadFile = async (uint8Array, fileName) => {
+        const blob = new Blob([uint8Array], { type: "application/zip" });
+        const url = URL.createObjectURL(blob);
 
-            URL.revokeObjectURL(url);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(url);
+      };
+
+      const displayFileInfo = (file) => {
+        fileName.textContent = file.name;
+        fileInfo.style.display = "block";
+        removeButton.style.display = "inline-block";
+        processButton.style.display = "inline-block";
+      };
+
+      const clearFile = () => {
+        selectedFile = null;
+        fileInput.value = "";
+
+        fileName.textContent = "";
+        fileInfo.style.display = "none";
+        removeButton.style.display = "none";
+        processButton.style.display = "none";
+      };
+
+      dropZone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        dropZone.style.backgroundColor = "#e0e0e0";
+      });
+
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.style.backgroundColor = "#ffffff";
+      });
+
+      dropZone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const files = event.dataTransfer.files;
+
+        if (files.length !== 1) {
+          alert("Please drop only one file.");
+          return;
         }
 
-        const displayFileInfo = (file) => {
-            fileName.textContent = file.name;
-            fileInfo.style.display = 'block';
-            removeButton.style.display = 'inline-block';
-            processButton.style.display = 'inline-block';
+        selectedFile = files[0];
+        dropZone.style.backgroundColor = "#f0f0f0";
+
+        displayFileInfo(selectedFile);
+      });
+
+      dropZone.addEventListener("click", () => {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+          selectedFile = fileInput.files[0];
+          displayFileInfo(selectedFile);
         }
+      });
 
-        const clearFile = () => {
-            selectedFile = null;
-            fileInput.value = '';
+      processButton.addEventListener("click", () => processFile());
 
-            fileName.textContent = "";
-            fileInfo.style.display = 'none';
-            removeButton.style.display = 'none';
-            processButton.style.display = 'none';
-        }
-
-        dropZone.addEventListener('dragover', (event) => {
-            event.preventDefault();
-            dropZone.style.backgroundColor = "#e0e0e0";
-        });
-
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.style.backgroundColor = "#ffffff";
-        });
-
-        dropZone.addEventListener('drop', (event) => {
-            event.preventDefault();
-            const files = event.dataTransfer.files;
-
-            if (files.length !== 1) {
-                alert("Please drop only one file.");
-                return;
-            }
-
-            selectedFile = files[0];
-            dropZone.style.backgroundColor = "#f0f0f0";
-
-            displayFileInfo(selectedFile);
-        });
-
-        dropZone.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                selectedFile = fileInput.files[0];
-                displayFileInfo(selectedFile);
-            }
-        });
-
-        processButton.addEventListener('click', () => processFile());
-
-        removeButton.addEventListener('click', () => clearFile());
+      removeButton.addEventListener("click", () => clearFile());
     </script>
-</head>
-<body>
-<div id="drop-zone" class="drop-zone">
-    <p>Drop a Deno executable or click to upload</p>
-    <input type="file" id="file-input" hidden>
-</div>
+  </head>
+  <body>
+    <div id="drop-zone" class="drop-zone">
+      <p>Drop a Deno executable or click to upload</p>
+      <input type="file" id="file-input" hidden />
+    </div>
 
-<div id="file-info" style="display:none;">
-    <p>Selected file: <span id="file-name"></span></p>
-    <button id="remove-file-btn">&times;</button>
-</div>
+    <div id="file-info" style="display: none">
+      <p>Selected file: <span id="file-name"></span></p>
+      <button id="remove-file-btn">&times;</button>
+    </div>
 
-<button id="process-btn">Dig in</button>
+    <button id="process-btn">Dig in</button>
 
-<div id="dino"></div>
-</body>
+    <div id="dino"></div>
+  </body>
 </html>

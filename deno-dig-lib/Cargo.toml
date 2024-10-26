@@ -18,6 +18,5 @@ wasm-bindgen-futures = "0.4.45"
 getrandom = { version = "0.2.15", features = ["js"] }
 zip = { default-features = false, features = ["deflate"], version ="2.2.0" }
 
-
 [dev-dependencies]
 tempfile = "3.13.0"

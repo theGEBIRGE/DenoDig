@@ -12,6 +12,8 @@ It can handle all the different iterations of `deno compile`:
 3) `>=1.33.3 <1.46`: [eszip](https://github.com/denoland/eszip) appended to the Deno binary (introduction of npm package support)
 4) `>= 1.46`: [eszip](https://github.com/denoland/eszip) included in an object file section of the Deno binary 
 
+I've written an [article](https://gebir.ge/blog/denos-getting-digged-down-12/) where I go into more details about the whole process.
+
 ## Usage
 ```shell
 Usage: DenoDig [OPTIONS] --input <INPUT>

@@ -10,7 +10,7 @@ use std::time::Instant;
 #[derive(Parser, Debug)]
 #[command(
     name = "Deno Dig",
-    version = "1.2.0",
+    version = "1.3.0",
     author = "Frederic Linn",
     about = "A tool for excavating application code and npm packages from stand-alone Deno binaries "
 )]
@@ -35,8 +35,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         env::current_dir().expect("[!] Failed to get the current executable path")
     });
 
-    let mut output_path= output_directory.join("excavated.zip");
-    output_path= absolute(output_path)?;
+    let mut output_path = output_directory.join("excavated.zip");
+    output_path = absolute(output_path)?;
 
     let binary_data = read(args.input).expect("[!] Failed to open input file");
 

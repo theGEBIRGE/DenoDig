@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 ### Security
 
+## [1.3.0] - 2024-10-29
+
+### Added
+- .env file for test case file paths
+
+### Changed
+- metadata file now has the proper .json extension
+
 ## [1.2.0] - 2024-10-26
 
 ### Added

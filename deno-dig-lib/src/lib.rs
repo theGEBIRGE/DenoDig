@@ -126,7 +126,7 @@ pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
         zip.start_file_from_path("bundle.js", options)
             .expect("[!] Can't create file in zip archive");
         zip.write_all(bundle).unwrap();
-        zip.start_file_from_path("metadata.js", options)
+        zip.start_file_from_path("metadata.json", options)
             .expect("[!] Can't create file in zip archive");
         zip.write_all(metadata).unwrap();
     } else if check_version(&binary_data, VERSION_TRES_OFFSET) {
@@ -151,7 +151,7 @@ pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
             .await
             .unwrap();
 
-        zip.start_file_from_path("metadata.js", options)
+        zip.start_file_from_path("metadata.json", options)
             .expect("[!] Failed to extract metadata");
         zip.write_all(metadata.as_bytes()).unwrap();
 
@@ -265,7 +265,7 @@ pub async fn process_binary_file(binary_data: Vec<u8>) -> Option<Vec<u8>> {
             .await
             .unwrap();
 
-        zip.start_file_from_path("metadata.js", options)
+        zip.start_file_from_path("metadata.json", options)
             .expect("[!] Can't create file in zip archive");
         zip.write_all(metadata.as_bytes()).unwrap();
 
@@ -441,93 +441,99 @@ fn check_version(binary_data: &[u8], offset: usize) -> bool {
     binary_data[binary_data.len() - offset..].starts_with(MAGIC_TRAILER)
 }
 
-// fn write_to_file<P: AsRef<Path>>(path: P, content: &[u8]) -> std::io::Result<()> {
-//     let mut file = File::create(path)?;
-//     file.write_all(content)
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dotenv::dotenv;
+    use std::env;
+    use std::fs::read;
+    use zip::ZipArchive;
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::fs::exists;
-//     use tempfile::tempdir;
-//
-//     #[tokio::test]
-//     async fn test_version_uno() {
-//         let temp_dir = tempdir().unwrap();
-//         let temp_path = temp_dir.path();
-//
-//         let binary_data = read("").expect("[!] Failed to open input file");
-//
-//         process_binary_file(
-//             binary_data,
-//         )
-//             .await
-//             .unwrap();
-//
-//         // Version uno only produces a bundle.js file.
-//         let bundle_path = temp_path.join("bundle.js");
-//
-//         assert!(exists(bundle_path).unwrap());
-//     }
-//
-//     #[tokio::test]
-//     async fn test_version_dos() {
-//         let temp_dir = tempdir().unwrap();
-//         let temp_path = temp_dir.path();
-//
-//         process_binary_file(
-//             Path::new(""),
-//             temp_path,
-//         )
-//             .await
-//             .unwrap();
-//
-//         // Version dos produces a bundle and a metadata file.
-//         let bundle_path = temp_path.join("bundle.js");
-//         let metadata_path = temp_path.join("metadata.json");
-//
-//         assert!(exists(bundle_path).unwrap());
-//         assert!(exists(metadata_path).unwrap());
-//     }
-//
-//     #[tokio::test]
-//     async fn test_version_tres() {
-//         let temp_dir = tempdir().unwrap();
-//         let temp_path = temp_dir.path();
-//
-//         process_binary_file(
-//             Path::new(""),
-//             temp_path,
-//         )
-//             .await
-//             .unwrap();
-//
-//         // Version tres produces a node_modules folder, a source directory and a metadata file.
-//         let metadata_path = temp_path.join("metadata.json");
-//         let modules_path = temp_path.join("node_modules");
-//
-//         assert!(exists(metadata_path).unwrap());
-//         assert!(exists(modules_path).unwrap());
-//     }
-//
-//     #[tokio::test]
-//     async fn test_version_quatro() {
-//         let temp_dir = tempdir().unwrap();
-//         let temp_path = temp_dir.path();
-//
-//         process_binary_file(
-//             Path::new(""),
-//             temp_path,
-//         )
-//             .await
-//             .unwrap();
-//
-//         // Version quatro produces a node_modules folder, a source directory and a metadata file.
-//         let metadata_path = temp_path.join("metadata.json");
-//         let modules_path = temp_path.join("node_modules");
-//
-//         assert!(exists(metadata_path).unwrap());
-//         assert!(exists(modules_path).unwrap());
-//     }
-// }
+    #[tokio::test]
+    async fn test_version_uno() {
+        dotenv().ok();
+        let test_file_path =
+            env::var("TEST_FILE_VERSION_UNO").expect("TEST_FILE_VERSION_UNO not set");
+        let binary_data = read(test_file_path).expect("[!] Failed to open input file");
+
+        let zip_data = process_binary_file(binary_data).await.unwrap();
+        let cursor = Cursor::new(zip_data);
+        let mut zip = ZipArchive::new(cursor).unwrap();
+
+        // Version uno only produces a bundle.js file.
+        let bundle_file = zip.by_name("bundle.js");
+
+        assert!(bundle_file.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_version_dos() {
+        dotenv().ok();
+        let test_file_path =
+            env::var("TEST_FILE_VERSION_DOS").expect("TEST_FILE_VERSION_DOS not set");
+
+        let binary_data = read(test_file_path).expect("[!] Failed to open input file");
+
+        let zip_data = process_binary_file(binary_data).await.unwrap();
+        let cursor = Cursor::new(zip_data);
+        let mut zip = ZipArchive::new(cursor).unwrap();
+
+        // Version dos produces a bundle and a metadata file.
+        let bundle_file_exists = {
+            let bundle_file = zip.by_name("bundle.js");
+            bundle_file.is_ok()
+        };
+
+        let metadata_file_exists = {
+            let metadata_file = zip.by_name("metadata.json");
+            metadata_file.is_ok()
+        };
+
+        assert!(bundle_file_exists);
+        assert!(metadata_file_exists);
+    }
+
+    #[tokio::test]
+    async fn test_version_tres() {
+        dotenv().ok();
+        let test_file_path =
+            env::var("TEST_FILE_VERSION_TRES").expect("TEST_FILE_VERSION_TRES not set");
+
+        let binary_data = read(test_file_path).expect("[!] Failed to open input file");
+
+        let zip_data = process_binary_file(binary_data).await.unwrap();
+        let cursor = Cursor::new(zip_data);
+        let mut zip = ZipArchive::new(cursor).unwrap();
+
+        // Version tres produces a node_modules folder, a source directory and a metadata file.
+        let node_modules_found = zip
+            .file_names()
+            .any(|file_name| file_name.contains("node_modules"));
+        let metadata_file = zip.by_name("metadata.json");
+
+        assert!(metadata_file.is_ok());
+        assert!(node_modules_found);
+    }
+
+    #[tokio::test]
+    async fn test_version_quatro() {
+        dotenv().ok();
+        let test_file_path =
+            env::var("TEST_FILE_VERSION_QUATRO").expect("TEST_FILE_VERSION_QUATRO not set");
+
+        let binary_data = read(test_file_path).expect("[!] Failed to open input file");
+
+        let zip_data = process_binary_file(binary_data).await.unwrap();
+        let cursor = Cursor::new(zip_data);
+        let mut zip = ZipArchive::new(cursor).unwrap();
+
+        // Version tres produces a node_modules folder, a source directory and a metadata file.
+        let node_modules_found = zip
+            .file_names()
+            .any(|file_name| file_name.contains("node_modules"));
+        let metadata_file = zip.by_name("metadata.json");
+
+        assert!(metadata_file.is_ok());
+        assert!(node_modules_found);
+    }
+}
